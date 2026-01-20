@@ -17,11 +17,13 @@ import android.os.Looper;
 import android.util.SparseArray;
 import android.view.MotionEvent;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.app.ActivityCompat;
@@ -32,6 +34,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
@@ -61,6 +65,11 @@ public class MainActivity extends AppCompatActivity {
     private String lastDeviceAddress;
     private boolean reconnectRequested = false;
 
+    private final ArrayList<BluetoothDevice> discoveredDevices = new ArrayList<>();
+    private final HashSet<String> discoveredAddresses = new HashSet<>();
+    private ArrayAdapter<String> deviceListAdapter;
+    private AlertDialog deviceDialog;
+
     private final Runnable reconnectRunnable = () -> {
         if (lastDeviceAddress != null) {
             connectToAddress(lastDeviceAddress);
@@ -79,6 +88,9 @@ public class MainActivity extends AppCompatActivity {
             } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action)) {
                 if (connectedDevice == null) {
                     updateDeviceStatus("No device found");
+                    if (deviceListAdapter != null && deviceListAdapter.isEmpty()) {
+                        deviceListAdapter.add("No device found");
+                    }
                 }
             }
         }
@@ -207,15 +219,9 @@ public class MainActivity extends AppCompatActivity {
         }
 
         reconnectRequested = false;
-        if (lastDeviceAddress != null) {
-            BluetoothDevice cached = bluetoothAdapter.getRemoteDevice(lastDeviceAddress);
-            if (cached != null && cached.getBondState() == BluetoothDevice.BOND_BONDED) {
-                connectToDevice(cached);
-                return;
-            }
-        }
-
         updateDeviceStatus("Searching...");
+        showDeviceDialog();
+        refreshDeviceList();
         if (bluetoothAdapter.isDiscovering()) {
             bluetoothAdapter.cancelDiscovery();
         }
@@ -226,12 +232,72 @@ public class MainActivity extends AppCompatActivity {
         if (connectedDevice != null) {
             return;
         }
-        if (lastDeviceAddress != null && lastDeviceAddress.equals(device.getAddress())) {
-            connectToDevice(device);
+        addDeviceToList(device);
+    }
+
+    private void showDeviceDialog() {
+        if (deviceListAdapter == null) {
+            deviceListAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1);
+        }
+        if (deviceDialog == null) {
+            deviceDialog = new AlertDialog.Builder(this)
+                    .setTitle("Bluetooth Devices")
+                    .setAdapter(deviceListAdapter, (dialog, which) -> {
+                        if (which >= 0 && which < discoveredDevices.size()) {
+                            BluetoothDevice device = discoveredDevices.get(which);
+                            connectToDevice(device);
+                        }
+                    })
+                    .setNegativeButton("Cancel", (dialog, which) -> {
+                        if (bluetoothAdapter != null && bluetoothAdapter.isDiscovering()) {
+                            bluetoothAdapter.cancelDiscovery();
+                        }
+                    })
+                    .create();
+        }
+        if (!deviceDialog.isShowing()) {
+            deviceDialog.show();
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private void refreshDeviceList() {
+        discoveredDevices.clear();
+        discoveredAddresses.clear();
+        deviceListAdapter.clear();
+
+        if (!hasBluetoothPermissions()) {
             return;
         }
-        if (device.getName() != null && !device.getName().isEmpty()) {
-            connectToDevice(device);
+        Set<BluetoothDevice> bonded = bluetoothAdapter.getBondedDevices();
+        if (bonded != null) {
+            for (BluetoothDevice device : bonded) {
+                addDeviceToList(device);
+            }
+        }
+        if (deviceListAdapter.isEmpty()) {
+            deviceListAdapter.add("Searching...");
+        }
+    }
+
+    private void addDeviceToList(BluetoothDevice device) {
+        if (device == null) {
+            return;
+        }
+        String address = device.getAddress();
+        if (address == null || discoveredAddresses.contains(address)) {
+            return;
+        }
+        discoveredAddresses.add(address);
+        discoveredDevices.add(device);
+        String label = safeName(device) + " (" + address + ")";
+        if (deviceListAdapter != null) {
+            if (deviceListAdapter.getCount() == 1 &&
+                    "Searching...".contentEquals(deviceListAdapter.getItem(0))) {
+                deviceListAdapter.clear();
+            }
+            deviceListAdapter.add(label);
+            deviceListAdapter.notifyDataSetChanged();
         }
     }
 
@@ -274,6 +340,11 @@ public class MainActivity extends AppCompatActivity {
         inputStream = socket.getInputStream();
         saveLastDevice(device.getAddress());
         handler.post(() -> updateDeviceStatus("Connected: " + safeName(device)));
+        handler.post(() -> {
+            if (deviceDialog != null && deviceDialog.isShowing()) {
+                deviceDialog.dismiss();
+            }
+        });
         startReaderThread();
     }
 
@@ -463,6 +534,9 @@ public class MainActivity extends AppCompatActivity {
         try {
             unregisterReceiver(discoveryReceiver);
         } catch (IllegalArgumentException ignored) {
+        }
+        if (deviceDialog != null) {
+            deviceDialog.dismiss();
         }
         disconnect("Disconnected");
     }
