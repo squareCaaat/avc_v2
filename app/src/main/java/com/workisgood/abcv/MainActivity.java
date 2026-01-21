@@ -198,7 +198,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         try {
-            outputStream.write((command + "\n").getBytes(StandardCharsets.UTF_8));
+            outputStream.write(command.getBytes(StandardCharsets.UTF_8));
             outputStream.flush();
         } catch (IOException e) {
             handleConnectionLost();
