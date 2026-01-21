@@ -119,28 +119,31 @@ public class MainActivity extends AppCompatActivity {
         deviceStatusText = findViewById(R.id.tv_device_status);
 
         searchButton.setOnClickListener(v -> startDiscovery());
-        shutdownButton.setOnClickListener(v -> disconnect("Disconnected"));
+        shutdownButton.setOnClickListener(v -> {
+            sendCommand("Q");
+            disconnect("Disconnected");
+        });
     }
 
     private void setupControlButtons() {
-        bindRepeatingButton(R.id.btn_arm_up, "AU", false);
-        bindRepeatingButton(R.id.btn_arm_down, "AD", false);
-        bindRepeatingButton(R.id.btn_arm_left, "AL", false);
-        bindRepeatingButton(R.id.btn_arm_right, "AR", false);
+        bindRepeatingButton(R.id.btn_arm_up, "K", false);
+        bindRepeatingButton(R.id.btn_arm_down, "J", false);
+        bindRepeatingButton(R.id.btn_arm_left, "H", false);
+        bindRepeatingButton(R.id.btn_arm_right, "L", false);
 
-        bindRepeatingButton(R.id.btn_link1_up, "L1U", false);
-        bindRepeatingButton(R.id.btn_link1_down, "L1D", false);
+        bindRepeatingButton(R.id.btn_link1_up, "R", false);
+        bindRepeatingButton(R.id.btn_link1_down, "T", false);
 
-        bindRepeatingButton(R.id.btn_link2_up, "L2U", false);
-        bindRepeatingButton(R.id.btn_link2_down, "L2D", false);
+        bindRepeatingButton(R.id.btn_link2_up, "Y", false);
+        bindRepeatingButton(R.id.btn_link2_down, "U", false);
 
-        bindRepeatingButton(R.id.btn_grab, "G", false);
-        bindRepeatingButton(R.id.btn_release, "GR", false);
+        bindRepeatingButton(R.id.btn_grab, "I", false);
+        bindRepeatingButton(R.id.btn_release, "O", false);
 
-        bindRepeatingButton(R.id.btn_car_forward, "F", true);
-        bindRepeatingButton(R.id.btn_car_left, "L", true);
-        bindRepeatingButton(R.id.btn_car_right, "R", true);
-        bindRepeatingButton(R.id.btn_car_backward, "B", true);
+        bindRepeatingButton(R.id.btn_car_forward, "W", false);
+        bindRepeatingButton(R.id.btn_car_left, "A", false);
+        bindRepeatingButton(R.id.btn_car_right, "D", false);
+        bindRepeatingButton(R.id.btn_car_backward, "S", false);
     }
 
     private void setupStatusBoxes() {
