@@ -226,9 +226,8 @@
                 android:layout_marginBottom="12dp"
                 android:layout_weight="1"
                 android:gravity="center"
-                android:text="Speed: 0"
-                android:lines="2"
-                android:textSize="12sp" />
+                android:text="Pin:3\nPulse:0.0\nTarget:4.0\nPWM:80\nDir:1;BK:0\n\nPin:10\nPulse:0.0\nTarget:4.0\nPWM:80\nDir:1;BK:0"
+                android:textSize="10sp" />
 
             <Button
                 android:id="@+id/btn_release"
