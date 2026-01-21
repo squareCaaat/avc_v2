@@ -408,14 +408,13 @@ public class MainActivity extends AppCompatActivity {
                 continue;
             }
             if (builder.length() > 0) {
-                builder.append('\n');
+                builder.append("\n\n");
             }
-            builder.append("pin ")
-                    .append(parts[0]).append(" | pulse ").append(parts[1])
-                    .append(" | target ").append(parts[2])
-                    .append(" | pwm ").append(parts[3])
-                    .append(" | dir ").append(parts[4])
-                    .append(" | brake ").append(parts[5]);
+            builder.append("pin: ").append(parts[0]).append('\n')
+                    .append("pulse: ").append(parts[1]).append('\n')
+                    .append("target: ").append(parts[2]).append('\n')
+                    .append("pwm: ").append(parts[3]).append('\n')
+                    .append("dir: ").append(parts[4]).append("; bk: ").append(parts[5]);
         }
         return builder.length() == 0 ? null : builder.toString();
     }
