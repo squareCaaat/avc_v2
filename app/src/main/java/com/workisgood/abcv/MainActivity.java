@@ -389,12 +389,35 @@ public class MainActivity extends AppCompatActivity {
         if (normalized.isEmpty()) {
             return;
         }
-        String upper = normalized.toUpperCase();
+        String motorStatus = parseMotorStatus(normalized);
+        if (motorStatus != null) {
+            statusSpeedText.setText(motorStatus);
+        }
+    }
 
-        // TODO: 수신 데이터 처리
-        // if (upper.startsWith("ARM")) {
-        //     statusArmText.setText("ARM: " + extractValue(normalized));
-        // }
+    private String parseMotorStatus(String payload) {
+        String[] lines = payload.split("\\r?\\n");
+        StringBuilder builder = new StringBuilder();
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            String[] parts = trimmed.split(":");
+            if (parts.length < 6) {
+                continue;
+            }
+            if (builder.length() > 0) {
+                builder.append('\n');
+            }
+            builder.append("pin ")
+                    .append(parts[0]).append(" | pulse ").append(parts[1])
+                    .append(" | target ").append(parts[2])
+                    .append(" | pwm ").append(parts[3])
+                    .append(" | dir ").append(parts[4])
+                    .append(" | brake ").append(parts[5]);
+        }
+        return builder.length() == 0 ? null : builder.toString();
     }
 
     private String extractValue(String payload) {
