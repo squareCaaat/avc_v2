@@ -15,5 +15,5 @@
 .cxx
 local.properties
 
-prd.md
-simple_ui.png
+docs/
+.keystore
