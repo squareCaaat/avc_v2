@@ -118,11 +118,37 @@ public class MainActivity extends AppCompatActivity {
         Button shutdownButton = findViewById(R.id.btn_shutdown);
         deviceStatusText = findViewById(R.id.tv_device_status);
 
+        applyClickEffect(searchButton);
+        applyClickEffect(shutdownButton);
+
         searchButton.setOnClickListener(v -> startDiscovery());
         shutdownButton.setOnClickListener(v -> {
             sendCommand("Q");
             disconnect("Disconnected");
         });
+    }
+
+    private void applyClickEffect(View button) {
+        button.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    animateButton(v, true);
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    animateButton(v, false);
+                    break;
+            }
+            return false;
+        });
+    }
+
+    private void animateButton(View v, boolean pressed) {
+        if (pressed) {
+            v.animate().scaleX(0.95f).scaleY(0.95f).alpha(0.7f).setDuration(100).start();
+        } else {
+            v.animate().scaleX(1.0f).scaleY(1.0f).alpha(1.0f).setDuration(100).start();
+        }
     }
 
     private void setupControlButtons() {
@@ -176,11 +202,13 @@ public class MainActivity extends AppCompatActivity {
         button.setOnTouchListener((v, event) -> {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
+                    animateButton(v, true);
                     handler.removeCallbacks(repeater);
                     handler.post(repeater);
                     return true;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
+                    animateButton(v, false);
                     handler.removeCallbacks(repeater);
                     if (sendStopOnRelease) {
                         sendCommand("S");
