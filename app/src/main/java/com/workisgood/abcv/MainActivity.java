@@ -39,13 +39,21 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.WebSocket;
+import okhttp3.WebSocketListener;
+
 public class MainActivity extends AppCompatActivity {
 
     private static final long COMMAND_INTERVAL_MS = 100L;
     private static final long RECONNECT_DELAY_MS = 2000L;
+    private static final long WEBSOCKET_RECONNECT_DELAY_MS = 3000L;
     private static final int PERMISSION_REQUEST_CODE = 1201;
     private static final UUID SPP_UUID =
             UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+    private static final String WEBSOCKET_URL = "ws://localhost:8080/ws";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final SparseArray<Runnable> repeaters = new SparseArray<>();
@@ -65,6 +73,10 @@ public class MainActivity extends AppCompatActivity {
     private String lastDeviceAddress;
     private boolean reconnectRequested = false;
 
+    private OkHttpClient webSocketClient;
+    private WebSocket webSocket;
+    private boolean webSocketReconnectEnabled = true;
+
     private final ArrayList<BluetoothDevice> discoveredDevices = new ArrayList<>();
     private final HashSet<String> discoveredAddresses = new HashSet<>();
     private ArrayAdapter<String> deviceListAdapter;
@@ -75,6 +87,8 @@ public class MainActivity extends AppCompatActivity {
             connectToAddress(lastDeviceAddress);
         }
     };
+
+    private final Runnable webSocketReconnectRunnable = this::startWebSocket;
 
     private final BroadcastReceiver discoveryReceiver = new BroadcastReceiver() {
         @Override
@@ -111,6 +125,7 @@ public class MainActivity extends AppCompatActivity {
         setupControlButtons();
         setupStatusBoxes();
         setupBluetooth();
+        setupWebSocket();
     }
 
     private void setupTopBar() {
@@ -410,6 +425,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void handleIncoming(String payload) {
         handler.post(() -> updateStatusBoxes(payload));
+        sendArduinoTelemetry(payload);
     }
 
     private void updateStatusBoxes(String payload) {
@@ -519,6 +535,121 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void setupWebSocket() {
+        if (webSocketClient == null) {
+            webSocketClient = new OkHttpClient.Builder()
+                    .retryOnConnectionFailure(true)
+                    .build();
+        }
+        startWebSocket();
+    }
+
+    private void startWebSocket() {
+        if (!webSocketReconnectEnabled) {
+            return;
+        }
+        if (webSocket != null) {
+            return;
+        }
+        Request request = new Request.Builder()
+                .url(WEBSOCKET_URL)
+                .build();
+        webSocket = webSocketClient.newWebSocket(request, new WebSocketListener() {
+            @Override
+            public void onOpen(@NonNull WebSocket webSocket, @NonNull Response response) {
+                android.util.Log.d("WebSocket", "Connected");
+            }
+
+            @Override
+            public void onMessage(@NonNull WebSocket webSocket, @NonNull String text) {
+                handleServerCommand(text);
+            }
+
+            @Override
+            public void onFailure(@NonNull WebSocket webSocket,
+                                  @NonNull Throwable t,
+                                  Response response) {
+                android.util.Log.d("WebSocket", "Failure: " + t.getMessage());
+                cleanupWebSocket();
+                scheduleWebSocketReconnect();
+            }
+
+            @Override
+            public void onClosed(@NonNull WebSocket webSocket, int code, @NonNull String reason) {
+                android.util.Log.d("WebSocket", "Closed: " + reason);
+                cleanupWebSocket();
+                scheduleWebSocketReconnect();
+            }
+        });
+    }
+
+    private void scheduleWebSocketReconnect() {
+        if (!webSocketReconnectEnabled) {
+            return;
+        }
+        handler.removeCallbacks(webSocketReconnectRunnable);
+        handler.postDelayed(webSocketReconnectRunnable, WEBSOCKET_RECONNECT_DELAY_MS);
+    }
+
+    private void cleanupWebSocket() {
+        if (webSocket != null) {
+            webSocket.cancel();
+            webSocket = null;
+        }
+    }
+
+    private void shutdownWebSocket() {
+        webSocketReconnectEnabled = false;
+        handler.removeCallbacks(webSocketReconnectRunnable);
+        if (webSocket != null) {
+            webSocket.close(1000, "app closed");
+            webSocket = null;
+        }
+        if (webSocketClient != null) {
+            webSocketClient.dispatcher().executorService().shutdown();
+        }
+    }
+
+    private void sendArduinoTelemetry(String payload) {
+        String data = payload.trim();
+        if (data.isEmpty()) {
+            return;
+        }
+        String payloadWithNewline = data + "\n";
+        String message = buildTelemetryMessage(payloadWithNewline);
+        sendWebSocketMessage(message);
+    }
+
+    private String buildTelemetryMessage(String payload) {
+        long timestamp = System.currentTimeMillis();
+        return "{\"timestamp\":" + timestamp + ",\"data\":\"" + escapeJson(payload) + "\"}";
+    }
+
+    private String escapeJson(String value) {
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
+    }
+
+    private void sendWebSocketMessage(String message) {
+        if (webSocket == null) {
+            return;
+        }
+        boolean sent = webSocket.send(message);
+        if (!sent) {
+            scheduleWebSocketReconnect();
+        }
+    }
+
+    private void handleServerCommand(String command) {
+        if (command == null || command.trim().isEmpty()) {
+            return;
+        }
+        android.util.Log.d("WebSocket", "Command received: " + command);
+        // TODO: 확장 시 명령 파싱 후 블루투스 명령 전송 처리
+    }
+
     private void saveLastDevice(String address) {
         lastDeviceAddress = address;
         SharedPreferences prefs = getSharedPreferences("bt_prefs", MODE_PRIVATE);
@@ -592,5 +723,6 @@ public class MainActivity extends AppCompatActivity {
             deviceDialog.dismiss();
         }
         disconnect("Disconnected");
+        shutdownWebSocket();
     }
 }
