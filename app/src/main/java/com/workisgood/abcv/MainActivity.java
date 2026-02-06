@@ -61,7 +61,10 @@ public class MainActivity extends AppCompatActivity {
     private TextView deviceStatusText;
     private TextView statusArmText;
     private TextView statusTiltText;
-    private TextView statusSpeedText;
+    private TextView statusBox3Text;
+    private TextView statusBox4Text;
+    
+    private String firstPinNumber = null;
 
     private BluetoothAdapter bluetoothAdapter;
     private BluetoothSocket bluetoothSocket;
@@ -190,7 +193,8 @@ public class MainActivity extends AppCompatActivity {
     private void setupStatusBoxes() {
         statusArmText = findViewById(R.id.tv_status_box1);
         statusTiltText = findViewById(R.id.tv_status_box2);
-        statusSpeedText = findViewById(R.id.tv_status_box3);
+        statusBox3Text = findViewById(R.id.tv_status_box3);
+        statusBox4Text = findViewById(R.id.tv_status_box4);
     }
 
     private void setupBluetooth() {
@@ -433,34 +437,33 @@ public class MainActivity extends AppCompatActivity {
         if (normalized.isEmpty()) {
             return;
         }
-        String motorStatus = parseMotorStatus(normalized);
-        if (motorStatus != null) {
-            statusSpeedText.setText(motorStatus);
+        
+        String[] parts = normalized.split(":");
+        if (parts.length < 6) {
+            return;
+        }
+        
+        String pinNumber = parts[0];
+        String formattedStatus = formatMotorStatus(parts);
+        
+        // 첫 번째로 도착한 핀 번호는 box3에, 다른 핀 번호는 box4에 표시
+        if (firstPinNumber == null) {
+            firstPinNumber = pinNumber;
+        }
+        
+        if (pinNumber.equals(firstPinNumber)) {
+            statusBox3Text.setText(formattedStatus);
+        } else {
+            statusBox4Text.setText(formattedStatus);
         }
     }
 
-    private String parseMotorStatus(String payload) {
-        String[] lines = payload.split("\\r?\\n");
-        StringBuilder builder = new StringBuilder();
-        for (String line : lines) {
-            String trimmed = line.trim();
-            if (trimmed.isEmpty()) {
-                continue;
-            }
-            String[] parts = trimmed.split(":");
-            if (parts.length < 6) {
-                continue;
-            }
-            if (builder.length() > 0) {
-                builder.append("\n\n");
-            }
-            builder.append("pin: ").append(parts[0]).append('\n')
-                    .append("pulse: ").append(parts[1]).append('\n')
-                    .append("target: ").append(parts[2]).append('\n')
-                    .append("pwm: ").append(parts[3]).append('\n')
-                    .append("dir: ").append(parts[4]).append("; bk: ").append(parts[5]);
-        }
-        return builder.length() == 0 ? null : builder.toString();
+    private String formatMotorStatus(String[] parts) {
+        return "Pin:" + parts[0] + "\n" +
+                "Pulse:" + parts[1] + "\n" +
+                "Target:" + parts[2] + "\n" +
+                "PWM:" + parts[3] + "\n" +
+                "Dir:" + parts[4] + ";BK:" + parts[5];
     }
 
     private String extractValue(String payload) {
