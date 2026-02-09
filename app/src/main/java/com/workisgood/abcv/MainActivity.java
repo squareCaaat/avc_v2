@@ -736,7 +736,6 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         android.util.Log.d("WebSocket", "Command received: " + command);
-        // TODO: 확장 시 명령 파싱 후 블루투스 명령 전송 처리
     }
 
     private void saveLastDevice(String address) {
