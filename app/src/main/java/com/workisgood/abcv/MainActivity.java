@@ -69,12 +69,12 @@ public class MainActivity extends AppCompatActivity {
     private final SparseArray<Runnable> repeaters = new SparseArray<>();
 
     private TextView deviceStatusText;
-    private TextView statusArmText;
-    private TextView statusTiltText;
-    private TextView statusBox3Text;
-    private TextView statusBox4Text;
+    private TextView statusArmText;      // box1 - ARM 정보
+    private TextView statusSteerText;    // box2 - 조향 정보
+    private TextView statusMotor1Text;   // box3 - 모터1 정보
+    private TextView statusMotor2Text;   // box4 - 모터2 정보
     
-    private String firstPinNumber = null;
+    private String firstMotorPin = null;
 
     private BluetoothAdapter bluetoothAdapter;
     private BluetoothSocket bluetoothSocket;
@@ -202,9 +202,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void setupStatusBoxes() {
         statusArmText = findViewById(R.id.tv_status_box1);
-        statusTiltText = findViewById(R.id.tv_status_box2);
-        statusBox3Text = findViewById(R.id.tv_status_box3);
-        statusBox4Text = findViewById(R.id.tv_status_box4);
+        statusSteerText = findViewById(R.id.tv_status_box2);
+        statusMotor1Text = findViewById(R.id.tv_status_box3);
+        statusMotor2Text = findViewById(R.id.tv_status_box4);
     }
 
     private void setupBluetooth() {
@@ -438,53 +438,140 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void handleIncoming(String payload) {
-        handler.post(() -> updateStatusBoxes(payload));
-        sendArduinoTelemetry(payload);
+        String trimmed = payload.trim();
+        if (trimmed.isEmpty()) {
+            return;
+        }
+        handler.post(() -> updateStatusBoxes(trimmed));
+        sendArduinoTelemetry(trimmed);
     }
+
+    // ── UI 표시 ──────────────────────────────────────────────
 
     private void updateStatusBoxes(String payload) {
-        String normalized = payload.trim();
-        if (normalized.isEmpty()) {
+        if (payload.length() < 2 || payload.charAt(1) != ':') {
             return;
         }
-        
-        String[] parts = normalized.split(":");
-        if (parts.length < 6) {
-            return;
+        char header = payload.charAt(0);
+        String data = payload.substring(2);
+        String[] parts = data.split(":");
+
+        switch (header) {
+            case 'm':
+                updateMotorDisplay(parts);
+                break;
+            case 's':
+                updateSteeringDisplay(parts);
+                break;
+            case 'a':
+                updateArmDisplay(parts);
+                break;
+            default:
+                android.util.Log.w("Parse", "Unknown header: " + header);
+                break;
         }
-        
-        String pinNumber = parts[0];
-        String formattedStatus = formatMotorStatus(parts);
-        
-        // 첫 번째로 도착한 핀 번호는 box3에, 다른 핀 번호는 box4에 표시
-        if (firstPinNumber == null) {
-            firstPinNumber = pinNumber;
+    }
+
+    private void updateMotorDisplay(String[] parts) {
+        // m:scPin:targetThrottle:activeSpeed:pulseCount:pwmOut
+        if (parts.length < 5) return;
+        String pin = parts[0];
+        String display = "Pin:" + pin
+                + "\nTarget:" + parts[1]
+                + "\nSpeed:" + parts[2]
+                + "\nPulse:" + parts[3]
+                + "\nPWM:" + parts[4];
+
+        if (firstMotorPin == null) {
+            firstMotorPin = pin;
         }
-        
-        if (pinNumber.equals(firstPinNumber)) {
-            statusBox3Text.setText(formattedStatus);
+        if (pin.equals(firstMotorPin)) {
+            statusMotor1Text.setText(display);
         } else {
-            statusBox4Text.setText(formattedStatus);
+            statusMotor2Text.setText(display);
         }
     }
 
-    private String formatMotorStatus(String[] parts) {
-        return "Pin:" + parts[0] + "\n" +
-                "Pulse:" + parts[1] + "\n" +
-                "Target:" + parts[2] + "\n" +
-                "PWM:" + parts[3] + "\n" +
-                "Dir:" + parts[4] + ";BK:" + parts[5];
+    private void updateSteeringDisplay(String[] parts) {
+        // s:currentAngle:targetAngle
+        if (parts.length < 2) return;
+        statusSteerText.setText("Cur:" + parts[0] + "\nTgt:" + parts[1]);
     }
 
-    private String extractValue(String payload) {
-        int idx = payload.indexOf(':');
-        if (idx < 0) {
-            idx = payload.indexOf('=');
+    private void updateArmDisplay(String[] parts) {
+        // a:curBottom:tgtBottom:curL1:tgtL1:curL2:tgtL2:curGrip:tgtGrip
+        if (parts.length < 8) return;
+        String display = "Base:" + parts[0] + "/" + parts[1]
+                + " L1:" + parts[2] + "/" + parts[3]
+                + "\nL2:" + parts[4] + "/" + parts[5]
+                + " Grip:" + parts[6] + "/" + parts[7];
+        statusArmText.setText(display);
+    }
+
+    // ── JSON 생성 & WebSocket 전송 ──────────────────────────
+
+    private void sendArduinoTelemetry(String payload) {
+        if (payload.length() < 2 || payload.charAt(1) != ':') {
+            return;
         }
-        if (idx >= 0 && idx + 1 < payload.length()) {
-            return payload.substring(idx + 1).trim();
+        char header = payload.charAt(0);
+        String data = payload.substring(2);
+        String[] parts = data.split(":");
+        String json = null;
+
+        switch (header) {
+            case 'm':
+                json = buildMotorJson(parts);
+                break;
+            case 's':
+                json = buildSteeringJson(parts);
+                break;
+            case 'a':
+                json = buildArmJson(parts);
+                break;
         }
-        return payload.trim();
+        if (json != null) {
+            sendWebSocketMessage(json);
+        }
+    }
+
+    private String buildMotorJson(String[] p) {
+        // m:scPin:targetThrottle:activeSpeed:pulseCount:pwmOut
+        if (p.length < 5) return null;
+        long ts = System.currentTimeMillis();
+        return "{\"timestamp\":" + ts
+                + ",\"type\":\"motor\""
+                + ",\"data\":{\"scPin\":" + p[0]
+                + ",\"targetThrottle\":" + p[1]
+                + ",\"activeSpeed\":" + p[2]
+                + ",\"pulseCount\":" + p[3]
+                + ",\"pwmOut\":" + p[4]
+                + "}}";
+    }
+
+    private String buildSteeringJson(String[] p) {
+        // s:currentAngle:targetAngle
+        if (p.length < 2) return null;
+        long ts = System.currentTimeMillis();
+        return "{\"timestamp\":" + ts
+                + ",\"type\":\"steering\""
+                + ",\"data\":{\"currentAngle\":" + p[0]
+                + ",\"targetAngle\":" + p[1]
+                + "}}";
+    }
+
+    private String buildArmJson(String[] p) {
+        // a:curBottom:tgtBottom:curL1:tgtL1:curL2:tgtL2:curGrip:tgtGrip
+        if (p.length < 8) return null;
+        long ts = System.currentTimeMillis();
+        return "{\"timestamp\":" + ts
+                + ",\"type\":\"arm\""
+                + ",\"data\":{"
+                + "\"armBottom\":{\"current\":" + p[0] + ",\"target\":" + p[1] + "}"
+                + ",\"linkOne\":{\"current\":" + p[2] + ",\"target\":" + p[3] + "}"
+                + ",\"linkTwo\":{\"current\":" + p[4] + ",\"target\":" + p[5] + "}"
+                + ",\"gripper\":{\"current\":" + p[6] + ",\"target\":" + p[7] + "}"
+                + "}}";
     }
 
     private void handleConnectionLost() {
@@ -624,28 +711,6 @@ public class MainActivity extends AppCompatActivity {
         if (webSocketClient != null) {
             webSocketClient.dispatcher().executorService().shutdown();
         }
-    }
-
-    private void sendArduinoTelemetry(String payload) {
-        String data = payload.trim();
-        if (data.isEmpty()) {
-            return;
-        }
-        String payloadWithNewline = data + "\n";
-        String message = buildTelemetryMessage(payloadWithNewline);
-        sendWebSocketMessage(message);
-    }
-
-    private String buildTelemetryMessage(String payload) {
-        long timestamp = System.currentTimeMillis();
-        return "{\"timestamp\":" + timestamp + ",\"data\":\"" + escapeJson(payload) + "\"}";
-    }
-
-    private String escapeJson(String value) {
-        return value.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r");
     }
 
     private void sendWebSocketMessage(String message) {
