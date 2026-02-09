@@ -405,6 +405,7 @@ public class MainActivity extends AppCompatActivity {
                 deviceDialog.dismiss();
             }
         });
+        sendBluetoothStatus(true);
         startReaderThread();
     }
 
@@ -575,6 +576,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void handleConnectionLost() {
+        sendBluetoothStatus(false);
         handler.post(() -> updateDeviceStatus("Disconnected"));
         closeSocket();
         scheduleReconnect();
@@ -590,6 +592,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void disconnect(String reason) {
+        sendBluetoothStatus(false);
         reconnectRequested = false;
         handler.removeCallbacks(reconnectRunnable);
         closeSocket();
@@ -711,6 +714,11 @@ public class MainActivity extends AppCompatActivity {
         if (webSocketClient != null) {
             webSocketClient.dispatcher().executorService().shutdown();
         }
+    }
+
+    private void sendBluetoothStatus(boolean connected) {
+        String json = "{\"type\":\"bluetooth\",\"data\":{\"connected\":" + connected + "}}";
+        sendWebSocketMessage(json);
     }
 
     private void sendWebSocketMessage(String message) {
