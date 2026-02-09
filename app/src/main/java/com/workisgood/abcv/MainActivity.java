@@ -71,10 +71,8 @@ public class MainActivity extends AppCompatActivity {
     private TextView deviceStatusText;
     private TextView statusArmText;      // box1 - ARM 정보
     private TextView statusSteerText;    // box2 - 조향 정보
-    private TextView statusMotor1Text;   // box3 - 모터1 정보
-    private TextView statusMotor2Text;   // box4 - 모터2 정보
-    
-    private String firstMotorPin = null;
+    private TextView statusMotorLeftText;  // box3 - 모터 left 정보
+    private TextView statusMotorRightText; // box4 - 모터 right 정보
 
     private BluetoothAdapter bluetoothAdapter;
     private BluetoothSocket bluetoothSocket;
@@ -203,8 +201,8 @@ public class MainActivity extends AppCompatActivity {
     private void setupStatusBoxes() {
         statusArmText = findViewById(R.id.tv_status_box1);
         statusSteerText = findViewById(R.id.tv_status_box2);
-        statusMotor1Text = findViewById(R.id.tv_status_box3);
-        statusMotor2Text = findViewById(R.id.tv_status_box4);
+        statusMotorLeftText = findViewById(R.id.tv_status_box3);
+        statusMotorRightText = findViewById(R.id.tv_status_box4);
     }
 
     private void setupBluetooth() {
@@ -474,22 +472,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateMotorDisplay(String[] parts) {
-        // m:scPin:targetThrottle:activeSpeed:pulseCount:pwmOut
+        // m:left|right:targetThrottle:activeSpeed:pulseCount:pwmOut
         if (parts.length < 5) return;
-        String pin = parts[0];
-        String display = "Pin:" + pin
+        String side = parts[0];
+        String display = side.toUpperCase()
                 + "\nTarget:" + parts[1]
                 + "\nSpeed:" + parts[2]
                 + "\nPulse:" + parts[3]
                 + "\nPWM:" + parts[4];
 
-        if (firstMotorPin == null) {
-            firstMotorPin = pin;
-        }
-        if (pin.equals(firstMotorPin)) {
-            statusMotor1Text.setText(display);
+        if ("left".equalsIgnoreCase(side)) {
+            statusMotorLeftText.setText(display);
         } else {
-            statusMotor2Text.setText(display);
+            statusMotorRightText.setText(display);
         }
     }
 
@@ -537,12 +532,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String buildMotorJson(String[] p) {
-        // m:scPin:targetThrottle:activeSpeed:pulseCount:pwmOut
+        // m:left|right:targetThrottle:activeSpeed:pulseCount:pwmOut
         if (p.length < 5) return null;
         long ts = System.currentTimeMillis();
         return "{\"timestamp\":" + ts
                 + ",\"type\":\"motor\""
-                + ",\"data\":{\"scPin\":" + p[0]
+                + ",\"data\":{\"side\":\"" + p[0] + "\""
                 + ",\"targetThrottle\":" + p[1]
                 + ",\"activeSpeed\":" + p[2]
                 + ",\"pulseCount\":" + p[3]
