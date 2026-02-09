@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -53,7 +54,16 @@ public class MainActivity extends AppCompatActivity {
     private static final int PERMISSION_REQUEST_CODE = 1201;
     private static final UUID SPP_UUID =
             UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
-    private static final String WEBSOCKET_URL = "ws://localhost:8080/ws";
+    
+    private static String getWebSocketUrl() {
+        String host = BuildConfig.WEBSOCKET_HOST;
+        if (host.startsWith("https://")) {
+            return "wss://" + host.substring(8) + "/ws";
+        } else if (host.startsWith("http://")) {
+            return "ws://" + host.substring(7) + "/ws";
+        }
+        return "wss://" + host + "/ws";
+    }
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final SparseArray<Runnable> repeaters = new SparseArray<>();
@@ -541,6 +551,9 @@ public class MainActivity extends AppCompatActivity {
     private void setupWebSocket() {
         if (webSocketClient == null) {
             webSocketClient = new OkHttpClient.Builder()
+                    .connectTimeout(10, TimeUnit.SECONDS)
+                    .readTimeout(30, TimeUnit.SECONDS)
+                    .writeTimeout(10, TimeUnit.SECONDS)
                     .retryOnConnectionFailure(true)
                     .build();
         }
@@ -555,7 +568,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         Request request = new Request.Builder()
-                .url(WEBSOCKET_URL)
+                .url(getWebSocketUrl())
                 .build();
         webSocket = webSocketClient.newWebSocket(request, new WebSocketListener() {
             @Override
